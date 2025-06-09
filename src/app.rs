@@ -1,10 +1,14 @@
 use color_eyre::eyre::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::prelude::{Buffer, Constraint, Layout, Rect, Stylize};
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, List, ListItem, ListState, StatefulWidget, Widget};
 use ratatui::{DefaultTerminal, Frame};
+
+const SELECTED_STYLE: Style = Style::new()
+    .bg(Color::DarkGray)
+    .add_modifier(Modifier::BOLD);
 
 /// Holds current application state
 pub struct App {
@@ -74,12 +78,26 @@ impl App {
     pub fn handle_key_event(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Char('q') => self.exit(),
+            KeyCode::Char('j') => self.todo_list.state.select_next(),
+            KeyCode::Char('k') => self.todo_list.state.select_previous(),
+            KeyCode::Char('g') => self.todo_list.state.select_first(),
+            KeyCode::Char('G') => self.todo_list.state.select_last(),
+            KeyCode::Char('x') => self.toggle_status(),
             _ => {}
         }
     }
 
     pub fn exit(&mut self) {
         self.exit = true;
+    }
+
+    pub fn toggle_status(&mut self) {
+        if let Some(i) = self.todo_list.state.selected() {
+            self.todo_list.items[i].status = match self.todo_list.items[i].status {
+                Status::Todo => Status::Completed,
+                Status::Completed => Status::Todo,
+            }
+        }
     }
 }
 
@@ -99,12 +117,8 @@ impl Widget for &mut App {
             .fg(Color::White)
             .render(border_area, buf);
 
-        let list = List::new(
-            self.todo_list
-                .items
-                .iter()
-                .map(|x| ListItem::from(x.todo.clone())),
-        );
+        let list = List::new(self.todo_list.items.iter().map(|x| ListItem::from(x)))
+            .highlight_style(SELECTED_STYLE);
         StatefulWidget::render(list, inner_area, buf, &mut self.todo_list.state);
     }
 }
@@ -136,5 +150,19 @@ impl FromIterator<(Status, &'static str, &'static str)> for TodoList {
             .collect();
         let state = ListState::default();
         Self { items, state }
+    }
+}
+
+impl From<&TodoItem> for ListItem<'_> {
+    fn from(value: &TodoItem) -> Self {
+        let text = match value.status {
+            Status::Todo => {
+                format!("☐ {}", value.todo)
+            }
+            Status::Completed => {
+                format!("✓ {}", value.todo)
+            }
+        };
+        ListItem::new(text)
     }
 }
