@@ -2,6 +2,7 @@ use color_eyre::eyre::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::prelude::{Buffer, Constraint, Layout, Rect, Stylize};
 use ratatui::style::Color;
+use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, List, ListItem, ListState, StatefulWidget, Widget};
 use ratatui::{DefaultTerminal, Frame};
 
@@ -11,25 +12,38 @@ pub struct App {
     exit: bool,
 }
 
+pub struct TodoItem {
+    status: Status,
+    todo: String,
+    info: String,
+}
+
 pub struct TodoList {
     items: Vec<TodoItem>,
     state: ListState,
 }
 
-#[derive(Debug)]
-pub struct TodoItem {
-    is_done: bool,
-    description: String,
+pub enum Status {
+    Todo,
+    Completed,
 }
 
 impl App {
-    pub fn new() -> App {
+    pub fn new() -> Self {
         Self {
-            todo_list: TodoList {
-                items: Vec::new(),
-                state: ListState::default(),
-            },
             exit: false,
+            todo_list: TodoList::from_iter([
+                (
+                    Status::Todo,
+                    "Get a list on the screen.",
+                    "Seems as though I succeeded.",
+                ),
+                (
+                    Status::Todo,
+                    "Get a list on the screen. 2",
+                    "Seems as though I succeeded.",
+                ),
+            ]),
         }
     }
 
@@ -75,20 +89,52 @@ impl Widget for &mut App {
             .margin(1)
             .areas(area);
         let [inner_area] = Layout::vertical([Constraint::Fill(1)])
-            .margin(1)
+            .horizontal_margin(2)
+            .vertical_margin(1)
             .areas(border_area);
 
         Block::bordered()
+            .title(Line::raw(" TODO ").centered())
             .border_type(BorderType::Rounded)
-            .fg(Color::Yellow)
+            .fg(Color::White)
             .render(border_area, buf);
 
         let list = List::new(
             self.todo_list
                 .items
                 .iter()
-                .map(|x| ListItem::from(x.description.clone())),
+                .map(|x| ListItem::from(x.todo.clone())),
         );
-        StatefulWidget::render(list, border_area, buf, &mut self.todo_list.state);
+        StatefulWidget::render(list, inner_area, buf, &mut self.todo_list.state);
+    }
+}
+
+impl TodoItem {
+    fn new(status: Status, todo: &'static str, info: &'static str) -> Self {
+        Self {
+            status,
+            todo: String::from(todo),
+            info: String::from(info),
+        }
+    }
+}
+
+impl TodoList {
+    fn new() -> TodoList {
+        Self {
+            items: Vec::new(),
+            state: ListState::default(),
+        }
+    }
+}
+
+impl FromIterator<(Status, &'static str, &'static str)> for TodoList {
+    fn from_iter<I: IntoIterator<Item = (Status, &'static str, &'static str)>>(iter: I) -> Self {
+        let items = iter
+            .into_iter()
+            .map(|(status, todo, info)| TodoItem::new(status, todo, info))
+            .collect();
+        let state = ListState::default();
+        Self { items, state }
     }
 }
