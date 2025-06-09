@@ -1,9 +1,12 @@
 use color_eyre::eyre::Result;
+use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use ratatui::prelude::{Buffer, Constraint, Layout, Rect, Stylize};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::layout::{Constraint, Flex, Layout, Rect};
+use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, BorderType, List, ListItem, ListState, StatefulWidget, Widget};
+use ratatui::widgets::{
+    Block, BorderType, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget,
+};
 use ratatui::{DefaultTerminal, Frame};
 
 const SELECTED_STYLE: Style = Style::new()
@@ -13,6 +16,8 @@ const SELECTED_STYLE: Style = Style::new()
 /// Holds current application state
 pub struct App {
     todo_list: TodoList,
+    view: View,
+    edit_mode: Option<EditMode>,
     exit: bool,
 }
 
@@ -32,10 +37,22 @@ pub enum Status {
     Completed,
 }
 
+pub enum View {
+    List,
+    Edit,
+}
+
+pub enum EditMode {
+    Normal,
+    Insert,
+}
+
 impl App {
     pub fn new() -> Self {
         Self {
             exit: false,
+            view: View::List,
+            edit_mode: None,
             todo_list: TodoList::from_iter([
                 (
                     Status::Todo,
@@ -61,11 +78,11 @@ impl App {
         return Ok(());
     }
 
-    pub fn draw(&mut self, frame: &mut Frame) {
+    fn draw(&mut self, frame: &mut Frame) {
         frame.render_widget(self, frame.area());
     }
 
-    pub fn handle_events(&mut self) -> Result<()> {
+    fn handle_events(&mut self) -> Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
                 self.handle_key_event(key_event);
@@ -75,7 +92,14 @@ impl App {
         return Ok(());
     }
 
-    pub fn handle_key_event(&mut self, key: KeyEvent) {
+    fn handle_key_event(&mut self, key: KeyEvent) {
+        match self.view {
+            View::List => self.handle_normal_key_event(key),
+            View::Edit => self.handle_edit_key_event(key),
+        }
+    }
+
+    fn handle_normal_key_event(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Char('q') => self.exit(),
             KeyCode::Char('j') => self.todo_list.state.select_next(),
@@ -83,15 +107,31 @@ impl App {
             KeyCode::Char('g') => self.todo_list.state.select_first(),
             KeyCode::Char('G') => self.todo_list.state.select_last(),
             KeyCode::Char('x') => self.toggle_status(),
+            KeyCode::Char('a') => self.add_entry(),
             _ => {}
         }
     }
 
-    pub fn exit(&mut self) {
+    fn handle_edit_key_event(&mut self, key: KeyEvent) {
+        let edit_mode = self.edit_mode.as_ref().expect("Expected an editor mode.");
+        match edit_mode {
+            EditMode::Normal => match key.code {
+                KeyCode::Char('q') => self.view = View::List,
+                KeyCode::Char('i') => self.edit_mode = Some(EditMode::Insert),
+                _ => {}
+            },
+            EditMode::Insert => match key.code {
+                KeyCode::Esc => self.edit_mode = Some(EditMode::Normal),
+                _ => {}
+            },
+        }
+    }
+
+    fn exit(&mut self) {
         self.exit = true;
     }
 
-    pub fn toggle_status(&mut self) {
+    fn toggle_status(&mut self) {
         if let Some(i) = self.todo_list.state.selected() {
             self.todo_list.items[i].status = match self.todo_list.items[i].status {
                 Status::Todo => Status::Completed,
@@ -99,10 +139,28 @@ impl App {
             }
         }
     }
+
+    fn add_entry(&mut self) {
+        self.switch_view(View::Edit);
+        self.edit_mode = Some(EditMode::Insert);
+    }
+
+    fn switch_view(&mut self, view: View) {
+        match view {
+            View::List => {
+                self.view = View::List;
+                self.edit_mode = None;
+            }
+            View::Edit => {
+                self.view = View::Edit;
+            }
+        }
+    }
 }
 
-impl Widget for &mut App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+// Rendering Logic
+impl App {
+    fn render_list_view(&mut self, area: Rect, buf: &mut Buffer) {
         let [border_area] = Layout::vertical([Constraint::Fill(1)])
             .margin(1)
             .areas(area);
@@ -120,6 +178,45 @@ impl Widget for &mut App {
         let list = List::new(self.todo_list.items.iter().map(|x| ListItem::from(x)))
             .highlight_style(SELECTED_STYLE);
         StatefulWidget::render(list, inner_area, buf, &mut self.todo_list.state);
+    }
+
+    fn render_edit_view(&mut self, area: Rect, buf: &mut Buffer) {
+        // Outer border
+        let bordered_area = centered_area(area, 40, 15);
+        Block::bordered()
+            .border_type(BorderType::Rounded)
+            .fg(Color::White)
+            .render(bordered_area, buf);
+
+        let [header_area, todo_area, info_area, footer_area] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(2),
+            Constraint::Fill(1),
+            Constraint::Length(1),
+        ])
+        .horizontal_margin(1)
+        .areas(bordered_area);
+        // Todo entry area
+        Block::bordered()
+            .borders(Borders::BOTTOM)
+            .border_type(BorderType::Plain)
+            .fg(Color::White)
+            .render(todo_area, buf);
+        // Footer area
+        let editor_mode = match self.edit_mode.as_ref().expect("Expected an editor mode.") {
+            EditMode::Normal => " NORMAL Mode ",
+            EditMode::Insert => " INSERT Mode ",
+        };
+        Paragraph::new(editor_mode).render(footer_area, buf);
+    }
+}
+
+impl Widget for &mut App {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        match self.view {
+            View::List => self.render_list_view(area, buf),
+            View::Edit => self.render_edit_view(area, buf),
+        }
     }
 }
 
@@ -165,4 +262,13 @@ impl From<&TodoItem> for ListItem<'_> {
         };
         ListItem::new(text)
     }
+}
+
+/// Helper function to make a centered area of any size
+fn centered_area(area: Rect, x: u16, y: u16) -> Rect {
+    let vertical = Layout::vertical([Constraint::Length(y)]).flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Length(x)]).flex(Flex::Center);
+    let [area] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
 }
