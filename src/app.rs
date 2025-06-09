@@ -2,18 +2,33 @@ use color_eyre::eyre::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::prelude::{Buffer, Constraint, Layout, Rect, Stylize};
 use ratatui::style::Color;
-use ratatui::widgets::{Block, BorderType, List, ListItem, Paragraph, Widget};
+use ratatui::widgets::{Block, BorderType, List, ListItem, ListState, StatefulWidget, Widget};
 use ratatui::{DefaultTerminal, Frame};
 
+/// Holds current application state
 pub struct App {
-    pub todo_items: Vec<TodoItem>,
-    pub exit: bool,
+    todo_list: TodoList,
+    exit: bool,
+}
+
+pub struct TodoList {
+    items: Vec<TodoItem>,
+    state: ListState,
+}
+
+#[derive(Debug)]
+pub struct TodoItem {
+    is_done: bool,
+    description: String,
 }
 
 impl App {
     pub fn new() -> App {
-        App {
-            todo_items: Vec::new(),
+        Self {
+            todo_list: TodoList {
+                items: Vec::new(),
+                state: ListState::default(),
+            },
             exit: false,
         }
     }
@@ -28,7 +43,7 @@ impl App {
         return Ok(());
     }
 
-    pub fn draw(&self, frame: &mut Frame) {
+    pub fn draw(&mut self, frame: &mut Frame) {
         frame.render_widget(self, frame.area());
     }
 
@@ -54,7 +69,7 @@ impl App {
     }
 }
 
-impl Widget for &App {
+impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let [border_area] = Layout::vertical([Constraint::Fill(1)])
             .margin(1)
@@ -68,16 +83,12 @@ impl Widget for &App {
             .fg(Color::Yellow)
             .render(border_area, buf);
 
-        List::new(
-            self.todo_items
+        let list = List::new(
+            self.todo_list
+                .items
                 .iter()
                 .map(|x| ListItem::from(x.description.clone())),
-        )
-        .render(inner_area, buf);
+        );
+        StatefulWidget::render(list, border_area, buf, &mut self.todo_list.state);
     }
-}
-
-pub struct TodoItem {
-    pub is_done: bool,
-    pub description: String,
 }
