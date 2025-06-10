@@ -205,6 +205,7 @@ impl App {
             .border_type(BorderType::Plain)
             .fg(Color::White)
             .render(todo_area, buf);
+        Paragraph::new(self.input.value()).render(todo_area, buf);
         // Footer area
         let editor_mode = match self.edit_mode.as_ref().expect("Expected an editor mode.") {
             EditMode::Normal => " NORMAL Mode ",
