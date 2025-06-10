@@ -83,7 +83,7 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
-        frame.render_widget(self, frame.area());
+        self.render(frame);
     }
 
     fn handle_events(&mut self) -> Result<()> {
@@ -163,33 +163,44 @@ impl App {
 
 // Rendering Logic
 impl App {
-    fn render_list_view(&mut self, area: Rect, buf: &mut Buffer) {
+    fn render(&mut self, f: &mut Frame) {
+        match self.view {
+            View::List => self.render_list_view(f),
+            View::Edit => self.render_edit_view(f),
+        }
+    }
+
+    fn render_list_view(&mut self, f: &mut Frame) {
         let [border_area] = Layout::vertical([Constraint::Fill(1)])
             .margin(1)
-            .areas(area);
+            .areas(f.area());
         let [inner_area] = Layout::vertical([Constraint::Fill(1)])
             .horizontal_margin(2)
             .vertical_margin(1)
             .areas(border_area);
 
-        Block::bordered()
-            .title(Line::raw(" TODO ").centered())
-            .border_type(BorderType::Rounded)
-            .fg(Color::White)
-            .render(border_area, buf);
+        f.render_widget(
+            Block::bordered()
+                .title(Line::raw(" TODO ").centered())
+                .border_type(BorderType::Rounded)
+                .fg(Color::White),
+            border_area,
+        );
 
         let list = List::new(self.todo_list.items.iter().map(|x| ListItem::from(x)))
             .highlight_style(SELECTED_STYLE);
-        StatefulWidget::render(list, inner_area, buf, &mut self.todo_list.state);
+        f.render_stateful_widget(list, inner_area, &mut self.todo_list.state);
     }
 
-    fn render_edit_view(&mut self, area: Rect, buf: &mut Buffer) {
+    fn render_edit_view(&mut self, f: &mut Frame) {
         // Outer border
-        let bordered_area = centered_area(area, 40, 15);
-        Block::bordered()
-            .border_type(BorderType::Rounded)
-            .fg(Color::White)
-            .render(bordered_area, buf);
+        let bordered_area = centered_area(f.area(), 40, 15);
+        f.render_widget(
+            Block::bordered()
+                .border_type(BorderType::Rounded)
+                .fg(Color::White),
+            bordered_area,
+        );
 
         let [header_area, todo_area, info_area, footer_area] = Layout::vertical([
             Constraint::Length(1),
@@ -200,27 +211,20 @@ impl App {
         .horizontal_margin(1)
         .areas(bordered_area);
         // Todo entry area
-        Block::bordered()
-            .borders(Borders::BOTTOM)
-            .border_type(BorderType::Plain)
-            .fg(Color::White)
-            .render(todo_area, buf);
-        Paragraph::new(self.input.value()).render(todo_area, buf);
+        f.render_widget(
+            Block::bordered()
+                .borders(Borders::BOTTOM)
+                .border_type(BorderType::Plain)
+                .fg(Color::White),
+            todo_area,
+        );
+        f.render_widget(Paragraph::new(self.input.value()), todo_area);
         // Footer area
         let editor_mode = match self.edit_mode.as_ref().expect("Expected an editor mode.") {
             EditMode::Normal => " NORMAL Mode ",
             EditMode::Insert => " INSERT Mode ",
         };
-        Paragraph::new(editor_mode).render(footer_area, buf);
-    }
-}
-
-impl Widget for &mut App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        match self.view {
-            View::List => self.render_list_view(area, buf),
-            View::Edit => self.render_edit_view(area, buf),
-        }
+        f.render_widget(Paragraph::new(editor_mode), footer_area);
     }
 }
 
