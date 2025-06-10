@@ -81,6 +81,7 @@ impl App {
         return Ok(());
     }
 
+    /// Handles all input events from user (discards non-key events)
     fn handle_events(&mut self) -> Result<()> {
         if let Some(key) = event::read()?.as_key_press_event() {
             self.handle_key_event(key);
@@ -88,6 +89,7 @@ impl App {
         return Ok(());
     }
 
+    /// Handles keyboard inputs from user
     fn handle_key_event(&mut self, key: KeyEvent) {
         match self.view {
             View::List => self.handle_list_key_event(key),
@@ -95,6 +97,7 @@ impl App {
         }
     }
 
+    /// Responsible for handling keyboard input in List View
     fn handle_list_key_event(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Char('q') => self.exit(),
@@ -108,6 +111,7 @@ impl App {
         }
     }
 
+    /// Responsible for handling keyboard input in Edit View
     fn handle_edit_key_event(&mut self, key: KeyEvent) {
         let edit_mode = self.edit_mode.as_ref().expect("Expected an editor mode.");
         match edit_mode {
@@ -127,10 +131,12 @@ impl App {
         }
     }
 
+    /// Marks the app for closure
     fn exit(&mut self) {
         self.exit = true;
     }
 
+    /// Toggles a TodoItem from Todo to Complete or vice-versa
     fn toggle_status(&mut self) {
         if let Some(i) = self.todo_list.state.selected() {
             self.todo_list.items[i].status = match self.todo_list.items[i].status {
@@ -140,6 +146,7 @@ impl App {
         }
     }
 
+    /// Adds a new TodoItem to the list and enters Edit View
     fn add_entry(&mut self) {
         self.todo_list
             .items
@@ -151,6 +158,7 @@ impl App {
         self.edit_mode = Some(EditMode::Insert);
     }
 
+    /// Sets the application view
     fn switch_view(&mut self, view: View) {
         match view {
             View::List => {
@@ -165,6 +173,7 @@ impl App {
         }
     }
 
+    /// Switches to desired 'Focus' (input field)
     fn switch_focus(&mut self, focus: Focus) {
         let selected_item = self
             .todo_list
@@ -186,6 +195,7 @@ impl App {
         self.focus = Some(focus);
     }
 
+    /// Graphically switches to the Focus below the current one
     fn focus_down(&mut self) {
         let selected_item = self
             .todo_list
@@ -211,6 +221,7 @@ impl App {
         }
     }
 
+    /// Graphically switches to the Focus above the current one
     fn focus_up(&mut self) {
         let selected_item = self
             .todo_list
@@ -239,6 +250,7 @@ impl App {
 
 // Rendering Logic
 impl App {
+    /// Renders the application to a given Frame
     fn render(&mut self, f: &mut Frame) {
         match self.view {
             View::List => self.render_list_view(f),
@@ -246,6 +258,7 @@ impl App {
         }
     }
 
+    /// Renders the application in List View
     fn render_list_view(&mut self, f: &mut Frame) {
         let [border_area] = Layout::vertical([Constraint::Fill(1)])
             .margin(1)
@@ -268,6 +281,7 @@ impl App {
         f.render_stateful_widget(list, inner_area, &mut self.todo_list.state);
     }
 
+    /// Renders the application in Edit View
     fn render_edit_view(&mut self, f: &mut Frame) {
         let focus = self
             .focus
@@ -373,6 +387,7 @@ impl App {
         }
     }
 
+    /// Renders the cursor as needed
     fn render_cursor(&mut self, f: &mut Frame, area: Rect) {
         self.cursor_pos = match self.edit_mode.clone().expect("Expected an editor mode.") {
             EditMode::Insert => Some(compute_cursor_pos(area, &self.input)),
