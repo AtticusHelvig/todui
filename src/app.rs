@@ -70,18 +70,15 @@ pub enum Focus {
 }
 
 impl App {
+    /// Handles main application loop
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.exit {
             // Rendering
-            terminal.draw(|frame| self.draw(frame))?;
+            terminal.draw(|frame| self.render(frame))?;
             // Input handling
             self.handle_events()?;
         }
         return Ok(());
-    }
-
-    fn draw(&mut self, frame: &mut Frame) {
-        self.render(frame);
     }
 
     fn handle_events(&mut self) -> Result<()> {
