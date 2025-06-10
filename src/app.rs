@@ -13,6 +13,7 @@ const SELECTED_STYLE: Style = Style::new()
     .add_modifier(Modifier::BOLD);
 
 /// Holds current application state
+#[derive(Default)]
 pub struct App {
     todo_list: TodoList,
     editing_index: Option<usize>,
@@ -24,33 +25,44 @@ pub struct App {
     exit: bool,
 }
 
+/// Represents a task to be done
 pub struct TodoItem {
     status: Status,
     todo: String,
     info: String,
 }
 
+/// Wrapper around a Vec of TodoItems and the ListState (for the List Widget)
+#[derive(Default)]
 pub struct TodoList {
     items: Vec<TodoItem>,
     state: ListState,
 }
 
+/// Represents whether a TodoItem is done or not
+#[derive(Default)]
 pub enum Status {
+    #[default]
     Todo,
     Completed,
 }
 
+/// Represents a "page" of the app
+#[derive(Default)]
 pub enum View {
+    #[default]
     List,
     Edit,
 }
 
+/// Represents a vim-like editor mode
 #[derive(Clone)]
 pub enum EditMode {
     Normal,
     Insert,
 }
 
+/// Represents the currently selected input field
 #[derive(Clone)]
 pub enum Focus {
     Todo,
@@ -58,30 +70,6 @@ pub enum Focus {
 }
 
 impl App {
-    pub fn new() -> Self {
-        Self {
-            exit: false,
-            view: View::List,
-            input: Input::default(),
-            cursor_pos: None,
-            focus: None,
-            edit_mode: None,
-            editing_index: None,
-            todo_list: TodoList::from_iter([
-                (
-                    Status::Todo,
-                    "Get a list on the screen.",
-                    "Seems as though I succeeded.",
-                ),
-                (
-                    Status::Todo,
-                    "Get a list on the screen. 2",
-                    "Seems as though I succeeded.",
-                ),
-            ]),
-        }
-    }
-
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.exit {
             // Rendering
@@ -390,12 +378,7 @@ impl App {
 
     fn render_cursor(&mut self, f: &mut Frame, area: Rect) {
         self.cursor_pos = match self.edit_mode.clone().expect("Expected an editor mode.") {
-            EditMode::Insert => {
-                let x = self.input.visual_cursor() as u16 % area.width + area.x;
-                let y =
-                    (self.input.visual_cursor() as u16 / area.width).min(area.height - 1) + area.y;
-                Some((x, y))
-            }
+            EditMode::Insert => Some(compute_cursor_pos(area, &self.input)),
             _ => self.cursor_pos,
         };
         match self.cursor_pos {
@@ -447,4 +430,18 @@ fn centered_area(area: Rect, x: u16, y: u16) -> Rect {
     let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area
+}
+
+/// Helper function to get a valid cursor position with an area
+fn compute_cursor_pos(area: Rect, input: &Input) -> (u16, u16) {
+    let rel_y = input.visual_cursor() as u16 / area.width;
+    let y = rel_y.min(area.height - 1) + area.y;
+
+    let x: u16;
+    if rel_y >= area.height {
+        x = area.width - 1;
+    } else {
+        x = input.visual_cursor() as u16 % area.width + area.x;
+    }
+    (x, y)
 }

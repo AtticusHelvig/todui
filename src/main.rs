@@ -10,7 +10,7 @@ fn main() -> Result<()> {
     let mut terminal = ratatui::init();
 
     // Run app
-    let mut app = App::new();
+    let mut app = App::default();
     let result = app.run(&mut terminal);
 
     // Restore terminal
