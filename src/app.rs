@@ -8,6 +8,8 @@ use ratatui::widgets::{
     Block, BorderType, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget,
 };
 use ratatui::{DefaultTerminal, Frame};
+use tui_input::Input;
+use tui_input::backend::crossterm::EventHandler;
 
 const SELECTED_STYLE: Style = Style::new()
     .bg(Color::DarkGray)
@@ -17,6 +19,7 @@ const SELECTED_STYLE: Style = Style::new()
 pub struct App {
     todo_list: TodoList,
     view: View,
+    input: Input,
     edit_mode: Option<EditMode>,
     exit: bool,
 }
@@ -52,6 +55,7 @@ impl App {
         Self {
             exit: false,
             view: View::List,
+            input: Input::default(),
             edit_mode: None,
             todo_list: TodoList::from_iter([
                 (
@@ -83,23 +87,20 @@ impl App {
     }
 
     fn handle_events(&mut self) -> Result<()> {
-        match event::read()? {
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event);
-            }
-            _ => {}
+        if let Some(key) = event::read()?.as_key_press_event() {
+            self.handle_key_event(key);
         }
         return Ok(());
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) {
         match self.view {
-            View::List => self.handle_normal_key_event(key),
+            View::List => self.handle_list_key_event(key),
             View::Edit => self.handle_edit_key_event(key),
         }
     }
 
-    fn handle_normal_key_event(&mut self, key: KeyEvent) {
+    fn handle_list_key_event(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Char('q') => self.exit(),
             KeyCode::Char('j') => self.todo_list.state.select_next(),
@@ -122,7 +123,9 @@ impl App {
             },
             EditMode::Insert => match key.code {
                 KeyCode::Esc => self.edit_mode = Some(EditMode::Normal),
-                _ => {}
+                _ => {
+                    self.input.handle_event(&Event::Key(key));
+                }
             },
         }
     }
