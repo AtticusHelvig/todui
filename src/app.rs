@@ -1,12 +1,9 @@
 use color_eyre::eyre::Result;
-use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::Line;
-use ratatui::widgets::{
-    Block, BorderType, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap,
-};
+use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::{DefaultTerminal, Frame};
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
@@ -301,7 +298,7 @@ impl App {
         );
 
         let [
-            header_area,
+            _header_area,
             todo_area,
             separator_area,
             info_area,
@@ -414,15 +411,6 @@ impl TodoItem {
             status,
             todo: String::from(todo),
             info: String::from(info),
-        }
-    }
-}
-
-impl TodoList {
-    fn new() -> TodoList {
-        Self {
-            items: Vec::new(),
-            state: ListState::default(),
         }
     }
 }
