@@ -5,7 +5,7 @@ use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets::{
-    Block, BorderType, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget,
+    Block, BorderType, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap,
 };
 use ratatui::{DefaultTerminal, Frame};
 use tui_input::Input;
@@ -18,8 +18,11 @@ const SELECTED_STYLE: Style = Style::new()
 /// Holds current application state
 pub struct App {
     todo_list: TodoList,
+    editing_index: Option<usize>,
     view: View,
     input: Input,
+    cursor_pos: Option<(u16, u16)>,
+    focus: Option<Focus>,
     edit_mode: Option<EditMode>,
     exit: bool,
 }
@@ -45,9 +48,16 @@ pub enum View {
     Edit,
 }
 
+#[derive(Clone)]
 pub enum EditMode {
     Normal,
     Insert,
+}
+
+#[derive(Clone)]
+pub enum Focus {
+    Todo,
+    Info,
 }
 
 impl App {
@@ -56,7 +66,10 @@ impl App {
             exit: false,
             view: View::List,
             input: Input::default(),
+            cursor_pos: None,
+            focus: None,
             edit_mode: None,
+            editing_index: None,
             todo_list: TodoList::from_iter([
                 (
                     Status::Todo,
@@ -119,6 +132,8 @@ impl App {
             EditMode::Normal => match key.code {
                 KeyCode::Char('q') => self.view = View::List,
                 KeyCode::Char('i') => self.edit_mode = Some(EditMode::Insert),
+                KeyCode::Char('j') => self.focus_down(),
+                KeyCode::Char('k') => self.focus_up(),
                 _ => {}
             },
             EditMode::Insert => match key.code {
@@ -144,6 +159,12 @@ impl App {
     }
 
     fn add_entry(&mut self) {
+        self.todo_list
+            .items
+            .push(TodoItem::new(Status::Todo, "", ""));
+        self.input.reset();
+        self.todo_list.state.select_last();
+        self.editing_index = Some(self.todo_list.items.len() - 1);
         self.switch_view(View::Edit);
         self.edit_mode = Some(EditMode::Insert);
     }
@@ -153,10 +174,83 @@ impl App {
             View::List => {
                 self.view = View::List;
                 self.edit_mode = None;
+                self.focus = None;
             }
             View::Edit => {
                 self.view = View::Edit;
+                self.focus = Some(Focus::Todo);
             }
+        }
+    }
+
+    fn switch_focus(&mut self, focus: Focus) {
+        let selected_item = self
+            .todo_list
+            .items
+            .get(
+                self.editing_index
+                    .expect("Expected a ListItem in Edit View."),
+            )
+            .expect("Expected a valid ListItem in Edit View.");
+
+        match focus {
+            Focus::Todo => {
+                self.input = Input::new(selected_item.todo.clone());
+            }
+            Focus::Info => {
+                self.input = Input::new(selected_item.info.clone());
+            }
+        }
+        self.focus = Some(focus);
+    }
+
+    fn focus_down(&mut self) {
+        let selected_item = self
+            .todo_list
+            .items
+            .get_mut(
+                self.editing_index
+                    .expect("Expected a ListItem in Edit View."),
+            )
+            .expect("Expected a valid ListItem in Edit View.");
+
+        match self.focus.clone() {
+            Some(focus) => {
+                let below = match focus {
+                    Focus::Todo => {
+                        selected_item.todo = self.input.value().to_string();
+                        Focus::Info
+                    }
+                    Focus::Info => Focus::Info,
+                };
+                self.switch_focus(below);
+            }
+            None => {}
+        }
+    }
+
+    fn focus_up(&mut self) {
+        let selected_item = self
+            .todo_list
+            .items
+            .get_mut(
+                self.editing_index
+                    .expect("Expected a ListItem in Edit View."),
+            )
+            .expect("Expected a valid ListItem in Edit View.");
+
+        match self.focus.clone() {
+            Some(focus) => {
+                let above = match focus {
+                    Focus::Todo => Focus::Todo,
+                    Focus::Info => {
+                        selected_item.info = self.input.value().to_string();
+                        Focus::Todo
+                    }
+                };
+                self.switch_focus(above);
+            }
+            None => {}
         }
     }
 }
@@ -193,6 +287,10 @@ impl App {
     }
 
     fn render_edit_view(&mut self, f: &mut Frame) {
+        let focus = self
+            .focus
+            .clone()
+            .expect("Expected a focus while in edit view.");
         // Outer border
         let bordered_area = centered_area(f.area(), 40, 15);
         f.render_widget(
@@ -202,34 +300,116 @@ impl App {
             bordered_area,
         );
 
-        let [header_area, todo_area, info_area, footer_area] = Layout::vertical([
+        let [
+            header_area,
+            todo_area,
+            separator_area,
+            info_area,
+            footer_area,
+        ] = Layout::vertical([
             Constraint::Length(1),
-            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Length(1),
             Constraint::Fill(1),
             Constraint::Length(1),
         ])
         .horizontal_margin(1)
         .areas(bordered_area);
-        // Todo entry area
+
         f.render_widget(
             Block::bordered()
                 .borders(Borders::BOTTOM)
                 .border_type(BorderType::Plain)
                 .fg(Color::White),
-            todo_area,
+            separator_area,
         );
-        f.render_widget(Paragraph::new(self.input.value()), todo_area);
+
+        // Todo entry area
+        if matches!(focus, Focus::Todo) {
+            if self.input.value().len() > todo_area.width as usize - 1 {
+                let mut truncated = self.input.value().to_string();
+                truncated.truncate(todo_area.width as usize - 1);
+                self.input = self.input.clone().with_value(truncated.to_string());
+            }
+            f.render_widget(Paragraph::new(self.input.value()), todo_area);
+        } else {
+            f.render_widget(
+                Paragraph::new(
+                    self.todo_list
+                        .items
+                        .get(
+                            self.editing_index
+                                .expect("Expected a selected TodoItem in Edit View."),
+                        )
+                        .expect("Expected a valid TodoItem while in Edit View.")
+                        .todo
+                        .clone(),
+                ),
+                todo_area,
+            );
+        }
+
+        if matches!(focus, Focus::Info) {
+            if self.input.value().len() > (info_area.width * info_area.height - 1) as usize {
+                let mut truncated = self.input.value().to_string();
+                truncated.truncate((info_area.width * info_area.height - 1) as usize);
+                self.input = self.input.clone().with_value(truncated.to_string());
+            }
+            f.render_widget(
+                Paragraph::new(self.input.value()).wrap(Wrap { trim: false }),
+                info_area,
+            );
+        } else {
+            f.render_widget(
+                Paragraph::new(
+                    self.todo_list
+                        .items
+                        .get(
+                            self.editing_index
+                                .expect("Expected a selected TodoItem in Edit View."),
+                        )
+                        .expect("Expected a valid TodoItem while in Edit View.")
+                        .info
+                        .clone(),
+                )
+                .wrap(Wrap { trim: false }),
+                info_area,
+            );
+        }
+
         // Footer area
         let editor_mode = match self.edit_mode.as_ref().expect("Expected an editor mode.") {
             EditMode::Normal => " NORMAL Mode ",
             EditMode::Insert => " INSERT Mode ",
         };
         f.render_widget(Paragraph::new(editor_mode), footer_area);
+
+        // Render cursor
+        match self.focus.clone().expect("Expected a focus.") {
+            Focus::Todo => self.render_cursor(f, todo_area),
+            Focus::Info => self.render_cursor(f, info_area),
+        }
+    }
+
+    fn render_cursor(&mut self, f: &mut Frame, area: Rect) {
+        self.cursor_pos = match self.edit_mode.clone().expect("Expected an editor mode.") {
+            EditMode::Insert => {
+                let x = self.input.visual_cursor() as u16 % area.width + area.x;
+                let y =
+                    (self.input.visual_cursor() as u16 / area.width).min(area.height - 1) + area.y;
+                Some((x, y))
+            }
+            _ => self.cursor_pos,
+        };
+        match self.cursor_pos {
+            Some(pos) => f.set_cursor_position(pos),
+            None => {}
+        }
     }
 }
 
 impl TodoItem {
-    fn new(status: Status, todo: &'static str, info: &'static str) -> Self {
+    fn new(status: Status, todo: &str, info: &str) -> Self {
         Self {
             status,
             todo: String::from(todo),
