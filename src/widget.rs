@@ -4,7 +4,7 @@ use ratatui::widgets::Widget;
 use std::collections::HashMap;
 
 /// Input Field Widget
-struct InputField {
+pub struct InputField {
     lines: Vec<String>,
     count: usize,
     width: u16,
@@ -23,7 +23,6 @@ impl InputField {
 
     pub fn set_input(&mut self, input: String) {
         self.lines = str_to_lines(input.as_str(), (self.width, self.height));
-        self.cursor_cache = None;
     }
 
     pub fn get_cursor_at(&mut self, index: usize) -> (u16, u16) {
