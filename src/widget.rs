@@ -1,7 +1,6 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::Widget;
-use std::collections::HashMap;
 
 /// Input Field Widget
 pub struct InputField {
@@ -25,7 +24,7 @@ impl InputField {
         self.lines = str_to_lines(input.as_str(), (self.width, self.height));
     }
 
-    pub fn get_cursor_at(&mut self, index: usize) -> (u16, u16) {
+    pub fn get_cursor_at(&self, index: usize) -> (u16, u16) {
         let mut index = usize::min(index, self.count);
         let mut y = 0;
 
