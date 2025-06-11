@@ -1,0 +1,165 @@
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::text::Span;
+use ratatui::widgets::Widget;
+use std::collections::HashMap;
+
+/// Input Field Widget
+struct InputField {
+    input: String,
+    width: u16,
+    height: u16,
+    cursor_cache: Option<HashMap<usize, (u16, u16)>>,
+}
+
+impl InputField {
+    pub fn new(input: String, size: (u16, u16)) -> Self {
+        Self {
+            input,
+            width: size.0,
+            height: size.1,
+            cursor_cache: None,
+        }
+    }
+
+    pub fn set_input(&mut self, input: String) {
+        self.input = input;
+        self.cursor_cache = None;
+    }
+
+    pub fn lines(&self) -> Vec<Span<'_>> {
+        str_to_lines(self.input.as_str(), (self.width, self.height))
+    }
+
+    pub fn get_cursor_at(&mut self, index: usize) -> (u16, u16) {
+        let index = usize::min(index, self.input.len() - 1);
+        if let Some(cache) = &self.cursor_cache {
+            return cache.get(&index).expect("Expected a valid index.").clone();
+        }
+        self.generate_cursor_cache();
+        return self
+            .cursor_cache
+            .as_ref()
+            .expect("Expected to generate cache.")
+            .get(&index)
+            .expect("Expected a valid index.")
+            .clone();
+    }
+
+    fn generate_cursor_cache(&mut self) {
+        let mut cache = HashMap::new();
+        let mut index: usize = 0;
+        let mut y: u16 = 0;
+
+        for line in self.lines() {
+            for x in 0..line.width() {
+                cache.insert(index, (x as u16, y));
+                index += 1;
+            }
+            y += 1;
+        }
+        self.cursor_cache = Some(cache);
+    }
+}
+
+impl Widget for &mut InputField {
+    fn render(self, area: Rect, buf: &mut Buffer) {}
+}
+
+/// Converts a &str to a Vec<Span>
+/// ONLY WORKS FOR ASCII STRINGS
+fn str_to_lines(string: &str, size: (u16, u16)) -> Vec<Span<'_>> {
+    let width = size.0 as usize;
+    let height = size.1 as usize;
+    let mut result = Vec::new();
+
+    for raw_line in string.lines() {
+        let tokens = tokenize_ascii(raw_line);
+        let mut line_start: Option<usize> = None;
+        let mut line_end = 0;
+        let mut current_len = 0;
+
+        for &(start, end) in &tokens {
+            let token_len = end - start;
+
+            // If we encounter a token that is longer than a line
+            if let Some(ls) = line_start {
+                // start by flushing the line (unless it is empty)
+                result.push(Span::raw(raw_line[ls..line_end].to_string()));
+                if result.len() >= height {
+                    return result;
+                }
+                // Then break it up
+                let mut pos = start;
+                while pos < end {
+                    let chunk_end = usize::min(pos + width, end);
+                    result.push(Span::raw(raw_line[pos..chunk_end].to_string()));
+                    if result.len() >= height {
+                        return result;
+                    }
+                    pos = chunk_end;
+                }
+                line_start = None;
+                line_end = 0;
+                continue;
+            }
+            // Check if the token fits on the line
+            if current_len + token_len > width {
+                // Flush the line if it doesn't
+                if let Some(ls) = line_start {
+                    result.push(Span::raw(raw_line[ls..line_end].to_string()));
+                    if result.len() >= height {
+                        return result;
+                    }
+                }
+                // Start new line with this token
+                line_start = Some(start);
+                line_end = end;
+                current_len = token_len;
+            } else {
+                // Add to the current line
+                if line_start.is_none() {
+                    line_start = Some(start);
+                }
+                line_end = end;
+                current_len += token_len;
+            }
+        }
+        // Last the leftovers
+        if let Some(ls) = line_start {
+            result.push(Span::raw(raw_line[ls..line_end].to_string()));
+        }
+    }
+    result
+}
+
+/// Returns indexes to 'tokens' which are sequences of whitespace or words
+/// ONLY WORKS ON ASCII
+fn tokenize_ascii(input: &str) -> Vec<(usize, usize)> {
+    let mut tokens = Vec::new();
+    let mut start = 0;
+    // Determine whether we start in a whitespace or word
+    let mut in_whitespace = input
+        .chars()
+        .next()
+        .map(|c| c.is_whitespace())
+        .unwrap_or(false);
+
+    for (i, c) in input.char_indices() {
+        if !c.is_ascii() {
+            panic!("Attempted to tokenize a non-ascii character.");
+        }
+        // End a token if we are in a whitespace and find a word
+        // or are in a word and find a whitespace
+        if c.is_whitespace() != in_whitespace {
+            tokens.push((start, i));
+            start = i;
+            in_whitespace = c.is_whitespace();
+        }
+    }
+    // Don't forget the leftovers
+    if start < input.len() {
+        tokens.push((start, input.len()));
+    }
+    tokens
+}
