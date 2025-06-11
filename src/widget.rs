@@ -1,12 +1,12 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::text::Span;
 use ratatui::widgets::Widget;
 use std::collections::HashMap;
 
 /// Input Field Widget
 struct InputField {
-    input: String,
+    lines: Vec<String>,
+    count: usize,
     width: u16,
     height: u16,
     cursor_cache: Option<HashMap<usize, (u16, u16)>>,
@@ -15,7 +15,8 @@ struct InputField {
 impl InputField {
     pub fn new(input: String, size: (u16, u16)) -> Self {
         Self {
-            input,
+            lines: str_to_lines(input.as_str(), (size.0, size.1)),
+            count: input.len(),
             width: size.0,
             height: size.1,
             cursor_cache: None,
@@ -23,16 +24,12 @@ impl InputField {
     }
 
     pub fn set_input(&mut self, input: String) {
-        self.input = input;
+        self.lines = str_to_lines(input.as_str(), (self.width, self.height));
         self.cursor_cache = None;
     }
 
-    pub fn lines(&self) -> Vec<Span<'_>> {
-        str_to_lines(self.input.as_str(), (self.width, self.height))
-    }
-
     pub fn get_cursor_at(&mut self, index: usize) -> (u16, u16) {
-        let index = usize::min(index, self.input.len() - 1);
+        let index = usize::min(index, self.count - 1);
         if let Some(cache) = &self.cursor_cache {
             return cache.get(&index).expect("Expected a valid index.").clone();
         }
@@ -51,8 +48,8 @@ impl InputField {
         let mut index: usize = 0;
         let mut y: u16 = 0;
 
-        for line in self.lines() {
-            for x in 0..line.width() {
+        for line in &self.lines {
+            for x in 0..line.len() {
                 cache.insert(index, (x as u16, y));
                 index += 1;
             }
@@ -68,7 +65,7 @@ impl Widget for &mut InputField {
 
 /// Converts a &str to a Vec<Span>
 /// ONLY WORKS FOR ASCII STRINGS
-fn str_to_lines(string: &str, size: (u16, u16)) -> Vec<Span<'_>> {
+fn str_to_lines(string: &str, size: (u16, u16)) -> Vec<String> {
     let width = size.0 as usize;
     let height = size.1 as usize;
     let mut result = Vec::new();
@@ -85,7 +82,7 @@ fn str_to_lines(string: &str, size: (u16, u16)) -> Vec<Span<'_>> {
             // If we encounter a token that is longer than a line
             if let Some(ls) = line_start {
                 // start by flushing the line (unless it is empty)
-                result.push(Span::raw(raw_line[ls..line_end].to_string()));
+                result.push(raw_line[ls..line_end].to_string());
                 if result.len() >= height {
                     return result;
                 }
@@ -93,7 +90,7 @@ fn str_to_lines(string: &str, size: (u16, u16)) -> Vec<Span<'_>> {
                 let mut pos = start;
                 while pos < end {
                     let chunk_end = usize::min(pos + width, end);
-                    result.push(Span::raw(raw_line[pos..chunk_end].to_string()));
+                    result.push(raw_line[pos..chunk_end].to_string());
                     if result.len() >= height {
                         return result;
                     }
@@ -107,7 +104,7 @@ fn str_to_lines(string: &str, size: (u16, u16)) -> Vec<Span<'_>> {
             if current_len + token_len > width {
                 // Flush the line if it doesn't
                 if let Some(ls) = line_start {
-                    result.push(Span::raw(raw_line[ls..line_end].to_string()));
+                    result.push(raw_line[ls..line_end].to_string());
                     if result.len() >= height {
                         return result;
                     }
@@ -127,7 +124,7 @@ fn str_to_lines(string: &str, size: (u16, u16)) -> Vec<Span<'_>> {
         }
         // Last the leftovers
         if let Some(ls) = line_start {
-            result.push(Span::raw(raw_line[ls..line_end].to_string()));
+            result.push(raw_line[ls..line_end].to_string());
         }
     }
     result
