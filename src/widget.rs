@@ -9,7 +9,6 @@ struct InputField {
     count: usize,
     width: u16,
     height: u16,
-    cursor_cache: Option<HashMap<usize, (u16, u16)>>,
 }
 
 impl InputField {
@@ -19,7 +18,6 @@ impl InputField {
             count: input.len(),
             width: size.0,
             height: size.1,
-            cursor_cache: None,
         }
     }
 
@@ -29,33 +27,22 @@ impl InputField {
     }
 
     pub fn get_cursor_at(&mut self, index: usize) -> (u16, u16) {
-        let index = usize::min(index, self.count - 1);
-        if let Some(cache) = &self.cursor_cache {
-            return cache.get(&index).expect("Expected a valid index.").clone();
-        }
-        self.generate_cursor_cache();
-        return self
-            .cursor_cache
-            .as_ref()
-            .expect("Expected to generate cache.")
-            .get(&index)
-            .expect("Expected a valid index.")
-            .clone();
-    }
+        let mut index = usize::min(index, self.count);
+        let mut y = 0;
 
-    fn generate_cursor_cache(&mut self) {
-        let mut cache = HashMap::new();
-        let mut index: usize = 0;
-        let mut y: u16 = 0;
-
-        for line in &self.lines {
-            for x in 0..line.len() {
-                cache.insert(index, (x as u16, y));
-                index += 1;
+        while index > 0 {
+            let line_len = self
+                .lines
+                .get(y)
+                .expect("Valid lines should exist for all index <= count.")
+                .len();
+            if (index as i32 - line_len as i32) < 0 {
+                return (index as u16, y as u16);
             }
+            index -= line_len;
             y += 1;
         }
-        self.cursor_cache = Some(cache);
+        panic!("Should always return early from loop...");
     }
 }
 
