@@ -2,6 +2,8 @@ use app::App;
 use color_eyre::eyre::Result;
 
 mod app;
+#[cfg(test)]
+mod tests;
 mod widget;
 
 fn main() -> Result<()> {

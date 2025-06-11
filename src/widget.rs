@@ -3,6 +3,7 @@ use ratatui::layout::Rect;
 use ratatui::widgets::Widget;
 
 /// Input Field Widget
+#[derive(Debug)]
 pub struct InputField {
     lines: Vec<String>,
     count: usize,
@@ -28,7 +29,7 @@ impl InputField {
         let mut index = usize::min(index, self.count);
         let mut y = 0;
 
-        while index > 0 {
+        loop {
             let line_len = self
                 .lines
                 .get(y)
@@ -40,7 +41,6 @@ impl InputField {
             index -= line_len;
             y += 1;
         }
-        panic!("Should always return early from loop...");
     }
 }
 
@@ -64,26 +64,28 @@ fn str_to_lines(string: &str, size: (u16, u16)) -> Vec<String> {
         for &(start, end) in &tokens {
             let token_len = end - start;
 
-            // If we encounter a token that is longer than a line
-            if let Some(ls) = line_start {
-                // start by flushing the line (unless it is empty)
-                result.push(raw_line[ls..line_end].to_string());
-                if result.len() >= height {
-                    return result;
-                }
-                // Then break it up
-                let mut pos = start;
-                while pos < end {
-                    let chunk_end = usize::min(pos + width, end);
-                    result.push(raw_line[pos..chunk_end].to_string());
+            if token_len > width {
+                // If we encounter a token that is longer than a line
+                if let Some(ls) = line_start {
+                    // start by flushing the line (unless it is empty)
+                    result.push(raw_line[ls..line_end].to_string());
                     if result.len() >= height {
                         return result;
                     }
-                    pos = chunk_end;
+                    // Then break it up
+                    let mut pos = start;
+                    while pos < end {
+                        let chunk_end = usize::min(pos + width, end);
+                        result.push(raw_line[pos..chunk_end].to_string());
+                        if result.len() >= height {
+                            return result;
+                        }
+                        pos = chunk_end;
+                    }
+                    line_start = None;
+                    line_end = 0;
+                    continue;
                 }
-                line_start = None;
-                line_end = 0;
-                continue;
             }
             // Check if the token fits on the line
             if current_len + token_len > width {
