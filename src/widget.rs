@@ -41,7 +41,7 @@ impl InputField {
         let lines = self.lines(area);
 
         if index == 0 {
-            return (0, 0);
+            return (area.x, area.y);
         }
         loop {
             let line_len = lines.get(y).unwrap().len();
