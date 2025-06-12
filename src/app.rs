@@ -1,9 +1,10 @@
+use crate::widget::{InputField, Wrap};
 use color_eyre::eyre::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph};
 use ratatui::{DefaultTerminal, Frame};
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
@@ -19,7 +20,6 @@ pub struct App {
     editing_index: Option<usize>,
     view: View,
     input: Input,
-    cursor_pos: Option<(u16, u16)>,
     focus: Option<Focus>,
     edit_mode: Option<EditMode>,
     exit: bool,
@@ -175,14 +175,9 @@ impl App {
 
     /// Switches to desired 'Focus' (input field)
     fn switch_focus(&mut self, focus: Focus) {
-        let selected_item = self
-            .todo_list
-            .items
-            .get(
-                self.editing_index
-                    .expect("Expected a ListItem in Edit View."),
-            )
-            .expect("Expected a valid ListItem in Edit View.");
+        let err = "Expected a selected ListItem in Edit View.";
+        let index = self.editing_index.expect(err);
+        let selected_item = self.todo_list.items.get(index).expect(err);
 
         match focus {
             Focus::Todo => {
@@ -197,16 +192,11 @@ impl App {
 
     /// Graphically switches to the Focus below the current one
     fn focus_down(&mut self) {
-        let selected_item = self
-            .todo_list
-            .items
-            .get_mut(
-                self.editing_index
-                    .expect("Expected a ListItem in Edit View."),
-            )
-            .expect("Expected a valid ListItem in Edit View.");
+        let err = "Expected a selected ListItem in Edit View.";
+        let index = self.editing_index.expect(err);
+        let selected_item = self.todo_list.items.get_mut(index).expect(err);
 
-        match self.focus.clone() {
+        match &self.focus {
             Some(focus) => {
                 let below = match focus {
                     Focus::Todo => {
@@ -223,16 +213,11 @@ impl App {
 
     /// Graphically switches to the Focus above the current one
     fn focus_up(&mut self) {
-        let selected_item = self
-            .todo_list
-            .items
-            .get_mut(
-                self.editing_index
-                    .expect("Expected a ListItem in Edit View."),
-            )
-            .expect("Expected a valid ListItem in Edit View.");
+        let err = "Expected a selected ListItem in Edit View.";
+        let index = self.editing_index.expect(err);
+        let selected_item = self.todo_list.items.get_mut(index).expect(err);
 
-        match self.focus.clone() {
+        match &self.focus {
             Some(focus) => {
                 let above = match focus {
                     Focus::Todo => Focus::Todo,
@@ -283,10 +268,8 @@ impl App {
 
     /// Renders the application in Edit View
     fn render_edit_view(&mut self, f: &mut Frame) {
-        let focus = self
-            .focus
-            .clone()
-            .expect("Expected a focus while in edit view.");
+        let err = "Expected a focus while in edit view.";
+        let focus = self.focus.clone().expect(err);
         // Outer border
         let bordered_area = centered_area(f.area(), 40, 15);
         f.render_widget(
@@ -320,57 +303,28 @@ impl App {
             separator_area,
         );
 
-        // Todo entry area
-        if matches!(focus, Focus::Todo) {
-            if self.input.value().len() > todo_area.width as usize - 1 {
-                let mut truncated = self.input.value().to_string();
-                truncated.truncate(todo_area.width as usize - 1);
-                self.input = self.input.clone().with_value(truncated.to_string());
-            }
-            f.render_widget(Paragraph::new(self.input.value()), todo_area);
-        } else {
-            f.render_widget(
-                Paragraph::new(
-                    self.todo_list
-                        .items
-                        .get(
-                            self.editing_index
-                                .expect("Expected a selected TodoItem in Edit View."),
-                        )
-                        .expect("Expected a valid TodoItem while in Edit View.")
-                        .todo
-                        .clone(),
-                ),
-                todo_area,
-            );
+        // Handle the focused area
+        let input_field = InputField::new(self.input.value().to_string(), Wrap::Word);
+        match focus {
+            Focus::Todo => f.render_widget(&input_field, todo_area),
+            Focus::Info => f.render_widget(&input_field, info_area),
         }
 
-        if matches!(focus, Focus::Info) {
-            if self.input.value().len() > (info_area.width * info_area.height - 1) as usize {
-                let mut truncated = self.input.value().to_string();
-                truncated.truncate((info_area.width * info_area.height - 1) as usize);
-                self.input = self.input.clone().with_value(truncated.to_string());
-            }
-            f.render_widget(
-                Paragraph::new(self.input.value()).wrap(Wrap { trim: false }),
-                info_area,
-            );
-        } else {
-            f.render_widget(
-                Paragraph::new(
-                    self.todo_list
-                        .items
-                        .get(
-                            self.editing_index
-                                .expect("Expected a selected TodoItem in Edit View."),
-                        )
-                        .expect("Expected a valid TodoItem while in Edit View.")
-                        .info
-                        .clone(),
-                )
-                .wrap(Wrap { trim: false }),
-                info_area,
-            );
+        // Handle the non focused areas
+        if !matches!(focus, Focus::Todo) {
+            let err = "Expected a selected ListItem in Edit View.";
+            let index = self.editing_index.expect(err);
+            let selected_item = self.todo_list.items.get(index).expect(err);
+            let text = selected_item.todo.clone();
+            f.render_widget(&InputField::new(text, Wrap::Word), todo_area);
+        }
+
+        if !matches!(focus, Focus::Info) {
+            let err = "Expected a selected ListItem in Edit View.";
+            let index = self.editing_index.expect(err);
+            let selected_item = self.todo_list.items.get(index).expect(err);
+            let text = selected_item.info.clone();
+            f.render_widget(&InputField::new(text, Wrap::Word), info_area);
         }
 
         // Footer area
@@ -382,20 +336,14 @@ impl App {
 
         // Render cursor
         match self.focus.clone().expect("Expected a focus.") {
-            Focus::Todo => self.render_cursor(f, todo_area),
-            Focus::Info => self.render_cursor(f, info_area),
-        }
-    }
-
-    /// Renders the cursor as needed
-    fn render_cursor(&mut self, f: &mut Frame, area: Rect) {
-        self.cursor_pos = match self.edit_mode.clone().expect("Expected an editor mode.") {
-            EditMode::Insert => Some(compute_cursor_pos(area, &self.input)),
-            _ => self.cursor_pos,
-        };
-        match self.cursor_pos {
-            Some(pos) => f.set_cursor_position(pos),
-            None => {}
+            Focus::Todo => render_cursor(
+                f,
+                input_field.get_cursor_at(todo_area, self.input.value().len()),
+            ),
+            Focus::Info => render_cursor(
+                f,
+                input_field.get_cursor_at(info_area, self.input.value().len()),
+            ),
         }
     }
 }
@@ -435,6 +383,11 @@ impl From<&TodoItem> for ListItem<'_> {
     }
 }
 
+/// Renders the cursor as needed
+fn render_cursor(f: &mut Frame, pos: (u16, u16)) {
+    f.set_cursor_position(pos)
+}
+
 /// Helper function to make a centered area of any size
 fn centered_area(area: Rect, x: u16, y: u16) -> Rect {
     let vertical = Layout::vertical([Constraint::Length(y)]).flex(Flex::Center);
@@ -442,18 +395,4 @@ fn centered_area(area: Rect, x: u16, y: u16) -> Rect {
     let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area
-}
-
-/// Helper function to get a valid cursor position with an area
-fn compute_cursor_pos(area: Rect, input: &Input) -> (u16, u16) {
-    let rel_y = input.visual_cursor() as u16 / area.width;
-    let y = rel_y.min(area.height - 1) + area.y;
-
-    let x: u16;
-    if rel_y >= area.height {
-        x = area.width - 1;
-    } else {
-        x = input.visual_cursor() as u16 % area.width + area.x;
-    }
-    (x, y)
 }
