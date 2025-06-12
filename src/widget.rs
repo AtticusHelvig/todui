@@ -112,6 +112,7 @@ fn wrap_words(string: &str, size: (u16, u16)) -> Vec<String> {
                     } else {
                         line_start = Some(pos);
                         line_end = end;
+                        current_len = end - pos;
                     }
                     if result.len() >= height {
                         return result;
