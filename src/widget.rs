@@ -40,10 +40,13 @@ impl InputField {
         let mut y = 0;
         let lines = self.lines(area);
 
+        if index == 0 {
+            return (0, 0);
+        }
         loop {
             let line_len = lines.get(y).unwrap().len();
             if index <= line_len {
-                return (index as u16, y as u16);
+                return (area.x + index as u16, area.y + y as u16);
             }
             index -= line_len;
             y += 1;
