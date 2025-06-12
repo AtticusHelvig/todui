@@ -90,6 +90,19 @@ fn wrap_words(string: &str, size: (u16, u16)) -> Vec<String> {
 
         for &(start, end) in &tokens {
             let token_len = end - start;
+            let last_line = result.len() == height - 1;
+            let fits_on_line = current_len + token_len <= width;
+
+            // Don't wrap the last line
+            if last_line && !fits_on_line {
+                let ls = match line_start {
+                    Some(val) => val,
+                    None => start,
+                };
+                let end = usize::min(ls + width, end);
+                result.push(raw_line[ls..end].to_string());
+                return result;
+            }
 
             // If we encounter a token that is longer than a line
             if token_len > width {
@@ -122,7 +135,7 @@ fn wrap_words(string: &str, size: (u16, u16)) -> Vec<String> {
                 continue;
             }
             // Check if the token fits on the line
-            if current_len + token_len > width {
+            if !fits_on_line {
                 // Flush the line if it doesn't
                 if let Some(ls) = line_start {
                     result.push(raw_line[ls..line_end].to_string());
