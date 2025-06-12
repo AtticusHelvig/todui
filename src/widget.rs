@@ -109,9 +109,6 @@ fn wrap_words(string: &str, size: (u16, u16)) -> Vec<String> {
                 // start by flushing the line (unless it is empty)
                 if let Some(ls) = line_start {
                     result.push(raw_line[ls..line_end].to_string());
-                    if result.len() >= height {
-                        return result;
-                    }
                 }
                 // Then break it up
                 let mut pos = start;
