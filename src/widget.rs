@@ -36,24 +36,26 @@ impl InputField {
     }
 
     pub fn get_cursor_at(&self, area: Rect, index: usize) -> (u16, u16) {
-        let mut index = usize::min(index, self.input.len());
+        if self.input.len() == 0 {
+            return (area.x, area.y);
+        }
+
+        let mut index = usize::min(index, self.input.len() - 1);
         let mut y = 0;
         let lines = self.lines(area);
 
-        if index == 0 {
-            return (area.x, area.y);
-        }
-        loop {
-            let line_len = lines.get(y).unwrap().len();
-            if index <= line_len {
-                return (area.x + index as u16, area.y + y as u16);
+        for line in lines {
+            if index >= line.len() {
+                index -= line.len();
+                y += 1;
+                continue;
             }
-            index -= line_len;
-            y += 1;
+            return (area.x + index as u16, area.y + y as u16);
         }
+        (area.x + area.width - 1, area.y + area.height - 1)
     }
 
-    fn lines(&self, area: Rect) -> Vec<String> {
+    pub fn lines(&self, area: Rect) -> Vec<String> {
         match self.wrapping {
             Wrap::None => self.input.lines().map(str::to_string).collect(),
             Wrap::Character => todo!(),
@@ -65,7 +67,6 @@ impl InputField {
 impl Widget for &InputField {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let mut area = area;
-        area.height = 1;
         for line in self.lines(area) {
             Span::raw(line).render(area, buf);
             area.y += 1;
@@ -103,14 +104,20 @@ fn wrap_words(string: &str, size: (u16, u16)) -> Vec<String> {
                 let mut pos = start;
                 while pos < end {
                     let chunk_end = usize::min(pos + width, end);
-                    result.push(raw_line[pos..chunk_end].to_string());
+                    // If it flows off the line, start a new line
+                    if pos + width <= end {
+                        result.push(raw_line[pos..chunk_end].to_string());
+                        line_start = None;
+                        line_end = 0;
+                    } else {
+                        line_start = Some(pos);
+                        line_end = end;
+                    }
                     if result.len() >= height {
                         return result;
                     }
                     pos = chunk_end;
                 }
-                line_start = None;
-                line_end = 0;
                 continue;
             }
             // Check if the token fits on the line
