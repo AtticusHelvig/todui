@@ -59,7 +59,7 @@ impl InputField {
     }
 }
 
-impl Widget for InputField {
+impl Widget for &InputField {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let mut area = area;
         area.height = 1;
