@@ -6,6 +6,7 @@ use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph};
 use ratatui::{DefaultTerminal, Frame};
+use serde::{Deserialize, Serialize};
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
 
@@ -26,6 +27,7 @@ pub struct App {
 }
 
 /// Represents a task to be done
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TodoItem {
     status: Status,
     todo: String,
@@ -40,7 +42,7 @@ pub struct TodoList {
 }
 
 /// Represents whether a TodoItem is done or not
-#[derive(Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub enum Status {
     #[default]
     Todo,
@@ -134,6 +136,7 @@ impl App {
     /// Marks the app for closure
     fn exit(&mut self) {
         self.exit = true;
+        let _ = crate::data::write_todos(&self.todo_list.items);
     }
 
     /// Toggles a TodoItem from Todo to Complete or vice-versa

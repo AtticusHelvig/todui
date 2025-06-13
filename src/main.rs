@@ -2,6 +2,7 @@ use app::App;
 use color_eyre::eyre::Result;
 
 mod app;
+mod data;
 mod widget;
 
 fn main() -> Result<()> {
