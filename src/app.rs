@@ -1,3 +1,4 @@
+use crate::data;
 use crate::widget::{InputField, Wrap};
 use color_eyre::eyre::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent};
@@ -74,6 +75,10 @@ pub enum Focus {
 impl App {
     /// Handles main application loop
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+        // Read todos from file
+        if let Ok(list) = data::read_todos() {
+            self.todo_list.items = list;
+        }
         while !self.exit {
             // Rendering
             terminal.draw(|frame| self.render(frame))?;
@@ -108,6 +113,7 @@ impl App {
             KeyCode::Char('g') => self.todo_list.state.select_first(),
             KeyCode::Char('G') => self.todo_list.state.select_last(),
             KeyCode::Char('x') => self.toggle_status(),
+            KeyCode::Char('d') => self.delete_entry(),
             KeyCode::Char('a') => self.add_entry(),
             _ => {}
         }
@@ -118,7 +124,7 @@ impl App {
         let edit_mode = self.edit_mode.as_ref().expect("Expected an editor mode.");
         match edit_mode {
             EditMode::Normal => match key.code {
-                KeyCode::Char('q') => self.view = View::List,
+                KeyCode::Char('q') => self.switch_view(View::List),
                 KeyCode::Char('i') => self.edit_mode = Some(EditMode::Insert),
                 KeyCode::Char('j') => self.focus_down(),
                 KeyCode::Char('k') => self.focus_up(),
@@ -136,7 +142,7 @@ impl App {
     /// Marks the app for closure
     fn exit(&mut self) {
         self.exit = true;
-        let _ = crate::data::write_todos(&self.todo_list.items);
+        _ = data::write_todos(&self.todo_list.items);
     }
 
     /// Toggles a TodoItem from Todo to Complete or vice-versa
@@ -146,6 +152,13 @@ impl App {
                 Status::Todo => Status::Completed,
                 Status::Completed => Status::Todo,
             }
+        }
+    }
+
+    /// Deletes the currently selected TodoItem
+    fn delete_entry(&mut self) {
+        if let Some(index) = self.todo_list.state.selected() {
+            self.todo_list.items.remove(index);
         }
     }
 
@@ -163,21 +176,28 @@ impl App {
 
     /// Sets the application view
     fn switch_view(&mut self, view: View) {
+        // Do any necessary cleanup
+        match self.view {
+            View::Edit => self.save_input(),
+            _ => {}
+        }
+        // Do any necessary setup
         match view {
             View::List => {
-                self.view = View::List;
                 self.edit_mode = None;
                 self.focus = None;
             }
             View::Edit => {
-                self.view = View::Edit;
                 self.focus = Some(Focus::Todo);
             }
         }
+        self.view = view;
     }
 
     /// Switches to desired 'Focus' (input field)
     fn switch_focus(&mut self, focus: Focus) {
+        self.save_input();
+
         let err = "Expected a selected ListItem in Edit View.";
         let index = self.editing_index.expect(err);
         let selected_item = self.todo_list.items.get(index).expect(err);
@@ -195,43 +215,38 @@ impl App {
 
     /// Graphically switches to the Focus below the current one
     fn focus_down(&mut self) {
-        let err = "Expected a selected ListItem in Edit View.";
-        let index = self.editing_index.expect(err);
-        let selected_item = self.todo_list.items.get_mut(index).expect(err);
-
-        match &self.focus {
-            Some(focus) => {
-                let below = match focus {
-                    Focus::Todo => {
-                        selected_item.todo = self.input.value().to_string();
-                        Focus::Info
-                    }
-                    Focus::Info => Focus::Info,
-                };
-                self.switch_focus(below);
-            }
-            None => {}
+        if let Some(focus) = &self.focus {
+            let below = match focus {
+                Focus::Todo => Focus::Info,
+                Focus::Info => Focus::Info,
+            };
+            self.switch_focus(below);
         }
     }
 
     /// Graphically switches to the Focus above the current one
     fn focus_up(&mut self) {
-        let err = "Expected a selected ListItem in Edit View.";
+        if let Some(focus) = &self.focus {
+            let above = match focus {
+                Focus::Todo => Focus::Todo,
+                Focus::Info => Focus::Todo,
+            };
+            self.switch_focus(above);
+        }
+    }
+
+    /// Saves the Input into the TodoItem
+    fn save_input(&mut self) {
+        let err = "Expected a selected ListItem while saving.";
         let index = self.editing_index.expect(err);
         let selected_item = self.todo_list.items.get_mut(index).expect(err);
+        let input = self.input.value().to_string();
 
-        match &self.focus {
-            Some(focus) => {
-                let above = match focus {
-                    Focus::Todo => Focus::Todo,
-                    Focus::Info => {
-                        selected_item.info = self.input.value().to_string();
-                        Focus::Todo
-                    }
-                };
-                self.switch_focus(above);
+        if let Some(focus) = &self.focus {
+            match focus {
+                Focus::Todo => selected_item.todo = input,
+                Focus::Info => selected_item.info = input,
             }
-            None => {}
         }
     }
 }
