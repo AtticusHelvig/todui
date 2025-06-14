@@ -4,7 +4,7 @@ use color_eyre::eyre::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph};
 use ratatui::{DefaultTerminal, Frame};
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,8 @@ use tui_input::backend::crossterm::EventHandler;
 const SELECTED_STYLE: Style = Style::new()
     .bg(Color::DarkGray)
     .add_modifier(Modifier::BOLD);
+const KEYBIND_STYLE: Style = Style::new().bold().fg(Color::Yellow);
+const COMPLETED_STYLE: Style = Style::new().fg(Color::Green);
 
 /// Holds current application state
 #[derive(Default)]
@@ -112,9 +114,10 @@ impl App {
             KeyCode::Char('k') => self.todo_list.state.select_previous(),
             KeyCode::Char('g') => self.todo_list.state.select_first(),
             KeyCode::Char('G') => self.todo_list.state.select_last(),
-            KeyCode::Char('x') => self.toggle_status(),
+            KeyCode::Char('c') => self.toggle_status(),
             KeyCode::Char('d') => self.delete_entry(),
             KeyCode::Char('a') => self.add_entry(),
+            KeyCode::Char('i') => self.edit_entry(),
             _ => {}
         }
     }
@@ -172,6 +175,18 @@ impl App {
         self.editing_index = Some(self.todo_list.items.len() - 1);
         self.switch_view(View::Edit);
         self.edit_mode = Some(EditMode::Insert);
+    }
+
+    /// Edits an existing TodoItem
+    fn edit_entry(&mut self) {
+        let err = "Expected a selected ListItem in Edit View.";
+        let index = self.todo_list.state.selected().expect(err);
+        let selected_item = self.todo_list.items.get(index).expect(err);
+
+        self.input = Input::new(selected_item.todo.clone());
+        self.editing_index = Some(index);
+        self.switch_view(View::Edit);
+        self.edit_mode = Some(EditMode::Normal);
     }
 
     /// Sets the application view
@@ -270,17 +285,10 @@ impl App {
             .horizontal_margin(2)
             .vertical_margin(1)
             .areas(border_area);
-
-        f.render_widget(
-            Block::bordered()
-                .title(Line::raw(" TODO ").centered())
-                .border_type(BorderType::Rounded)
-                .fg(Color::White),
-            border_area,
-        );
-
         let list = List::new(self.todo_list.items.iter().map(|x| ListItem::from(x)))
             .highlight_style(SELECTED_STYLE);
+
+        render_border(f, border_area);
         f.render_stateful_widget(list, inner_area, &mut self.todo_list.state);
     }
 
@@ -390,12 +398,8 @@ impl FromIterator<(Status, &'static str, &'static str)> for TodoList {
 impl From<&TodoItem> for ListItem<'_> {
     fn from(value: &TodoItem) -> Self {
         let text = match value.status {
-            Status::Todo => {
-                format!("☐ {}", value.todo)
-            }
-            Status::Completed => {
-                format!("✓ {}", value.todo)
-            }
+            Status::Todo => Span::raw(format!("☐ {}", value.todo)),
+            Status::Completed => Span::styled(format!("✓ {}", value.todo), COMPLETED_STYLE),
         };
         ListItem::new(text)
     }
@@ -413,4 +417,28 @@ fn centered_area(area: Rect, x: u16, y: u16) -> Rect {
     let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area
+}
+
+/// Renders the outermost border with appropriate titles
+fn render_border(f: &mut Frame, area: Rect) {
+    let instructions = Line::from(vec![
+        Span::styled(" [Q]", KEYBIND_STYLE),
+        Span::raw("uit "),
+        Span::styled("[A]", KEYBIND_STYLE),
+        Span::raw("dd "),
+        Span::styled("[D]", KEYBIND_STYLE),
+        Span::raw("elete "),
+        Span::styled("[C]", KEYBIND_STYLE),
+        Span::raw("omplete "),
+    ])
+    .centered();
+
+    f.render_widget(
+        Block::bordered()
+            .title(Line::raw(" TODO ").centered())
+            .title_bottom(instructions)
+            .border_type(BorderType::Rounded)
+            .fg(Color::White),
+        area,
+    );
 }
