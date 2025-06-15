@@ -359,7 +359,7 @@ impl App {
         );
 
         // Handle the focused area
-        let input_field = InputField::new(self.input.value().to_string(), Wrap::Word);
+        let input_field = InputField::new(self.input.value(), Wrap::Word);
         match focus {
             Focus::Todo => f.render_widget(&input_field, todo_area),
             Focus::Info => f.render_widget(&input_field, info_area),

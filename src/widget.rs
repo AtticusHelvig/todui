@@ -23,12 +23,15 @@ pub enum Wrap {
 }
 
 impl InputField {
-    pub fn new(input: String, wrapping: Wrap) -> Self {
-        Self { input, wrapping }
+    pub fn new<T: Into<String>>(input: T, wrapping: Wrap) -> Self {
+        Self {
+            input: input.into(),
+            wrapping,
+        }
     }
 
-    pub fn set_input(&mut self, input: String) {
-        self.input = input;
+    pub fn set_input<T: Into<String>>(&mut self, input: T) {
+        self.input = input.into();
     }
 
     pub fn set_wrapping(&mut self, wrapping: Wrap) {
