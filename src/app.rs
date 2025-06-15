@@ -27,10 +27,11 @@ pub struct App {
     focus: Option<Focus>,
     edit_mode: Option<EditMode>,
     exit: bool,
+    yank_buffer: Option<TodoItem>,
 }
 
 /// Represents a task to be done
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TodoItem {
     status: Status,
     todo: String,
@@ -45,7 +46,7 @@ pub struct TodoList {
 }
 
 /// Represents whether a TodoItem is done or not
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub enum Status {
     #[default]
     Todo,
@@ -118,6 +119,8 @@ impl App {
             KeyCode::Char('d') => self.delete_entry(),
             KeyCode::Char('a') => self.add_entry(),
             KeyCode::Char('i') => self.edit_entry(),
+            KeyCode::Char('y') => self.yank_entry(),
+            KeyCode::Char('p') => self.paste_entry(),
             _ => {}
         }
     }
@@ -187,6 +190,32 @@ impl App {
         self.editing_index = Some(index);
         self.switch_view(View::Edit);
         self.edit_mode = Some(EditMode::Normal);
+    }
+
+    /// Yanks (copies) an entry if an item is selected, None otherwise
+    fn yank_entry(&mut self) {
+        let index = self.todo_list.state.selected();
+        let entry = if let Some(index) = index {
+            self.todo_list.items.get(index).cloned()
+        } else {
+            None
+        };
+        self.yank_buffer = entry;
+    }
+
+    /// Pastes an entry below the selection, or index 0 if nothing is selected
+    fn paste_entry(&mut self) {
+        let entry = match &self.yank_buffer {
+            Some(val) => val,
+            None => return,
+        };
+
+        let index = match self.todo_list.state.selected() {
+            None => 0,
+            Some(val) => val + 1,
+        };
+
+        self.todo_list.items.insert(index, entry.clone());
     }
 
     /// Sets the application view
