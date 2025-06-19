@@ -164,6 +164,7 @@ impl App {
     /// Deletes the currently selected TodoItem
     fn delete_entry(&mut self) {
         if let Some(index) = self.todo_list.state.selected() {
+            self.yank_entry();
             self.todo_list.items.remove(index);
         }
     }
